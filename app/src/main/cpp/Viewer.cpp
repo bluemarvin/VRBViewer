@@ -5,13 +5,15 @@
 #include "vrb/Color.h"
 #include "vrb/CullVisitor.h"
 #include "vrb/DrawableList.h"
-#include "vrb/Light.h"
-#include "vrb/Logger.h"
 #include "vrb/GLError.h"
 #include "vrb/Group.h"
+#include "vrb/Light.h"
+#include "vrb/Logger.h"
 #include "vrb/Matrix.h"
+#include "vrb/ModelLoaderAndroid.h"
 #include "vrb/NodeFactoryObj.h"
 #include "vrb/ParserObj.h"
+#include "vrb/ProgramFactory.h"
 #include "vrb/RenderContext.h"
 #include "vrb/Transform.h"
 #include "vrb/Toggle.h"
@@ -28,8 +30,7 @@ struct Viewer::State {
   float far;
   RenderContextPtr context;
   CreationContextPtr creation;
-  NodeFactoryObjPtr factory;
-  ParserObjPtr parser;
+  ModelLoaderAndroidPtr loader;
   GroupPtr root;
   LightPtr light;
   TransformPtr model;
@@ -39,10 +40,9 @@ struct Viewer::State {
   Color clearColor;
   State() : paused(false), initialized(false), near(0.1f), far(100.0f) {
     context = RenderContext::Create();
+    loader = ModelLoaderAndroid::Create(context);
     creation = context->GetRenderThreadCreationContext();
-    factory = NodeFactoryObj::Create(creation);
-    parser = ParserObj::Create(creation);
-    parser->SetObserver(factory);
+    context->GetProgramFactory()->SetLoaderThread(loader);
     root = Group::Create(creation);
     light = Light::Create(creation);
     root->AddLight(light);
@@ -71,16 +71,13 @@ Viewer::Resume() {
 void
 Viewer::InitializeJava(JNIEnv* aEnv, jobject aActivity, jobject aAssets) {
   m.context->InitializeJava(aEnv, aActivity, aAssets);
+  m.loader->InitializeJava(aEnv, aActivity, aAssets);
   if (!m.model) {
     m.model = Transform::Create(m.creation);
-    m.factory->SetModelRoot(m.model);
-    m.parser->LoadModel("teapot.obj");
-    //m.parser->LoadModel("TestCutting.obj");
-    //m.parser->LoadModel("Landscape.obj");
     m.root->AddNode(m.model);
-    m.factory->SetModelRoot(nullptr);
     // FIXME vrb::Transform should default to idenity.
     m.model->SetTransform(Matrix::Translation(Vector(0.0f, 0.0f, 0.0f)));
+    m.loader->LoadModel("vr_controller_oculusquest_right.obj", m.model);
   }
 }
 
@@ -91,6 +88,7 @@ Viewer::InitializeGL() {
   }
   m.initialized = m.context->InitializeGL();
   if (m.initialized) {
+    m.loader->InitializeGL();
     VRB_LOG("*** Initialized GL");
     VRB_GL_CHECK(glEnable(GL_DEPTH_TEST));
     VRB_GL_CHECK(glEnable(GL_CULL_FACE));
@@ -101,6 +99,7 @@ Viewer::InitializeGL() {
 
 void
 Viewer::ShutdownJava() {
+  m.loader->ShutdownJava();
   m.context->ShutdownJava();
 }
 
@@ -108,6 +107,7 @@ void
 Viewer::ShutdownGL() {
   VRB_LOG("*** Shutdown GL");
   m.initialized = false;
+  m.loader->ShutdownGL();
   m.context->ShutdownGL();
 }
 
@@ -151,7 +151,7 @@ Viewer::Draw() {
   VRB_GL_CHECK(glClearColor(m.clearColor.Red(), m.clearColor.Green(), m.clearColor.Blue(), m.clearColor.Alpha()));
   VRB_GL_CHECK(glEnable(GL_BLEND));
   VRB_GL_CHECK(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
-  m.camera->SetTransform(Matrix::Translation(vrb::Vector(0.0f, 2.0f, 10.0f)));
+  m.camera->SetTransform(Matrix::Translation(vrb::Vector(0.0f, 0.0f, 0.2f)));
   m.model->SetTransform(Matrix::Rotation(sRight, sPitch).PreMultiply(Matrix::Rotation(sUp, sHeading)));
   //m.model->SetTransform(Matrix::Rotation(sRight, PI_FLOAT / 8.0f));
   if (!m.context->IsOnRenderThread()) {
