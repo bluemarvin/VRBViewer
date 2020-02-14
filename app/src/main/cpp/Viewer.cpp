@@ -1,6 +1,7 @@
 #include "Viewer.h"
 #include "vrb/ConcreteClass.h"
 
+#include "vrb/AnimatedTransform.h"
 #include "vrb/CameraSimple.h"
 #include "vrb/Color.h"
 #include "vrb/CullVisitor.h"
@@ -33,7 +34,7 @@ struct Viewer::State {
   ModelLoaderAndroidPtr loader;
   GroupPtr root;
   LightPtr light;
-  TransformPtr model;
+  AnimatedTransformPtr model;
   CullVisitorPtr cullVisitor;
   DrawableListPtr drawList;
   CameraSimplePtr camera;
@@ -73,10 +74,13 @@ Viewer::InitializeJava(JNIEnv* aEnv, jobject aActivity, jobject aAssets) {
   m.context->InitializeJava(aEnv, aActivity, aAssets);
   m.loader->InitializeJava(aEnv, aActivity, aAssets);
   if (!m.model) {
-    m.model = Transform::Create(m.creation);
+    m.model = AnimatedTransform::Create(m.creation);
+    m.model->AddRotationAnimation(Vector(0.0f, 1.0f, 0.0f), PI_FLOAT)
+      .AddStaticTransform(Matrix::Position(Vector(0.3f, 0.0f, 0.0f)))
+      .AddRotationAnimation(Vector(0.0f, 1.0f, 0.0f), -PI_FLOAT / 3.0f)
+      .AddTranslationAnimation(Vector(0.0f, 0.0f, -1.0f), 1.0f);
+    m.model->SetAnimationState(AnimationState::Play);
     m.root->AddNode(m.model);
-    // FIXME vrb::Transform should default to idenity.
-    m.model->SetTransform(Matrix::Translation(Vector(0.0f, 0.0f, 0.0f)));
     m.loader->LoadModel("vr_controller_oculusquest_right.obj", m.model);
   }
 }
@@ -133,10 +137,7 @@ Viewer::SetViewport(const int aWidth, const int aHeight) {
   }
 }
 
-static float sPitch = 0.0f; // PI_FLOAT / 4.0f; // 0.0f;
-static float sHeading = 0.0f;
-static const Vector sRight(1.0f, 0.0f, 0.0f);
-static const Vector sUp(0.0f, 1.0f, 0.0f);
+
 void
 Viewer::Draw() {
   if (m.paused) {
@@ -148,23 +149,29 @@ Viewer::Draw() {
       return;
     }
   }
+  m.clearColor.SetRGB(
+      (1.0f + std::sinf(std::fmod(static_cast<float>(m.context->GetTimestamp()), 2.0f * PI_FLOAT))) / 2.0f,
+      (1.0f + std::sinf(std::fmod(static_cast<float>(m.context->GetTimestamp()) * 0.25f, 2.0f * PI_FLOAT))) / 2.0f,
+      (1.0f + std::sinf(std::fmod(static_cast<float>(m.context->GetTimestamp()) + PI_FLOAT, 2.0f * PI_FLOAT))) / 2.0f
+  );
   VRB_GL_CHECK(glClearColor(m.clearColor.Red(), m.clearColor.Green(), m.clearColor.Blue(), m.clearColor.Alpha()));
   VRB_GL_CHECK(glEnable(GL_BLEND));
   VRB_GL_CHECK(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
-  m.camera->SetTransform(Matrix::Translation(vrb::Vector(0.0f, 0.0f, 0.2f)));
-  m.model->SetTransform(Matrix::Rotation(sRight, sPitch).PreMultiply(Matrix::Rotation(sUp, sHeading)));
-  //m.model->SetTransform(Matrix::Rotation(sRight, PI_FLOAT / 8.0f));
+  static double ltime = m.context->GetTimestamp();
+  if ((m.context->GetTimestamp() - ltime) > 8.0) {
+    ltime = m.context->GetTimestamp();
+    m.model->ResetAnimations();
+  }
+  m.camera->SetTransform(Matrix::Translation(vrb::Vector(0.0f, 0.0f, 0.7f)));
   if (!m.context->IsOnRenderThread()) {
     VRB_LOG("UPDATING NOT ON RENDER THREAD!");
   }
+  bool pause = std::fmod(std::floor(m.context->GetTimestamp()), 2.0f) == 0.0;
+  m.model->SetAnimationState(pause ? AnimationState::Stop : AnimationState::Play);
   m.context->Update();
   m.drawList->Reset();
   m.root->Cull(*m.cullVisitor, *m.drawList);
   m.drawList->Draw(*m.camera);
-  //sPitch += PI_FLOAT / 80.0f;
-  if (sPitch >= (2 * PI_FLOAT)) { sPitch = 0.0f; }
-  sHeading += PI_FLOAT / 200.0f;
-  if (sHeading >= (2 * PI_FLOAT)) { sHeading = 0.0f; }
 }
 
 Viewer::Viewer(State& aState) : m(aState) {}
