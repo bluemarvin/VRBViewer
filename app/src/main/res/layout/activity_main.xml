@@ -1,42 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context="org.mozilla.vrbviewer.MainActivity">
 
-
-    <LinearLayout
-        android:id="@+id/layout"
+    <android.opengl.GLSurfaceView
+        android:id="@+id/gl_view"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical">
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-            <ImageButton
-                android:id="@+id/imageButton"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:src="@android:drawable/ic_menu_revert" />
+        android:layout_height="match_parent" />
 
-            <EditText
-                android:id="@+id/urlBar"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:layout_weight="100"
-                android:inputType="textUri" />
-        </LinearLayout>
-        <android.opengl.GLSurfaceView
-            android:id="@+id/gl_view"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            >
-        </android.opengl.GLSurfaceView>
+    <TextView
+        android:id="@+id/frame_rate_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="#000000"
+        app:layout_constraintStart_toStartOf="@+id/gl_view"
+        app:layout_constraintTop_toTopOf="@+id/gl_view" />
 
-
-
-    </LinearLayout>
 </android.support.constraint.ConstraintLayout>

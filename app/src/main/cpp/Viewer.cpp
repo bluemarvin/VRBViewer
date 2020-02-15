@@ -39,7 +39,8 @@ struct Viewer::State {
   DrawableListPtr drawList;
   CameraSimplePtr camera;
   Color clearColor;
-  State() : paused(false), initialized(false), near(0.1f), far(100.0f) {
+  bool simpleMode;
+  State() : paused(false), initialized(false), near(0.1f), far(100.0f), simpleMode(true) {
     context = RenderContext::Create();
     loader = ModelLoaderAndroid::Create(context);
     creation = context->GetRenderThreadCreationContext();
@@ -51,6 +52,32 @@ struct Viewer::State {
     drawList = DrawableList::Create(creation);
     camera = CameraSimple::Create(creation);
     clearColor.SetRGB(1.0f, 0.0f, 0.0f);
+  }
+  void SimpleAnimation() {
+    if (!model) {
+      return;
+    }
+    model->ClearAnimations();
+    model->AddRotationAnimation(Vector(0.0f, 1.0f, 0.0f), PI_FLOAT);
+    model->SetAnimationState(AnimationState::Play);
+  }
+
+  void ComplexAnimation() {
+    if (!model) {
+      return;
+    }
+    model->ClearAnimations();
+    model->AddRotationAnimation(Vector(0.0f, 1.0f, 0.0f), PI_FLOAT)
+        .AddStaticTransform(Matrix::Position(Vector(0.3f, 0.0f, 0.0f)))
+        .AddRotationAnimation(Vector(0.0f, 1.0f, 0.0f), -PI_FLOAT / 3.0f);
+    model->SetAnimationState(AnimationState::Play);
+  }
+  void SetColor(const double aDelta) {
+    clearColor.SetRGB(
+        (1.0f + std::sinf(std::fmod(static_cast<float>(aDelta), 2.0f * PI_FLOAT))) / 2.0f,
+        (1.0f + std::sinf(std::fmod(static_cast<float>(aDelta) * 0.25f, 2.0f * PI_FLOAT))) / 2.0f,
+        (1.0f + std::sinf(std::fmod(static_cast<float>(aDelta) + PI_FLOAT, 2.0f * PI_FLOAT))) / 2.0f
+    );
   }
 };
 
@@ -75,11 +102,7 @@ Viewer::InitializeJava(JNIEnv* aEnv, jobject aActivity, jobject aAssets) {
   m.loader->InitializeJava(aEnv, aActivity, aAssets);
   if (!m.model) {
     m.model = AnimatedTransform::Create(m.creation);
-    m.model->AddRotationAnimation(Vector(0.0f, 1.0f, 0.0f), PI_FLOAT)
-      .AddStaticTransform(Matrix::Position(Vector(0.3f, 0.0f, 0.0f)))
-      .AddRotationAnimation(Vector(0.0f, 1.0f, 0.0f), -PI_FLOAT / 3.0f)
-      .AddTranslationAnimation(Vector(0.0f, 0.0f, -1.0f), 1.0f);
-    m.model->SetAnimationState(AnimationState::Play);
+    m.SimpleAnimation();
     m.root->AddNode(m.model);
     m.loader->LoadModel("vr_controller_oculusquest_right.obj", m.model);
   }
@@ -116,16 +139,6 @@ Viewer::ShutdownGL() {
 }
 
 void
-Viewer::LoadModel(const std::string& aUri) {
-
-}
-
-void
-Viewer::ReloadCurrentModel() {
-
-}
-
-void
 Viewer::SetViewport(const int aWidth, const int aHeight) {
   VRB_GL_CHECK(glViewport(0, 0, aWidth, aHeight));
   m.camera->SetClipRange(m.near, m.far);
@@ -149,30 +162,36 @@ Viewer::Draw() {
       return;
     }
   }
-  m.clearColor.SetRGB(
-      (1.0f + std::sinf(std::fmod(static_cast<float>(m.context->GetTimestamp()), 2.0f * PI_FLOAT))) / 2.0f,
-      (1.0f + std::sinf(std::fmod(static_cast<float>(m.context->GetTimestamp()) * 0.25f, 2.0f * PI_FLOAT))) / 2.0f,
-      (1.0f + std::sinf(std::fmod(static_cast<float>(m.context->GetTimestamp()) + PI_FLOAT, 2.0f * PI_FLOAT))) / 2.0f
-  );
+  m.SetColor(m.context->GetTimestamp());
   VRB_GL_CHECK(glClearColor(m.clearColor.Red(), m.clearColor.Green(), m.clearColor.Blue(), m.clearColor.Alpha()));
   VRB_GL_CHECK(glEnable(GL_BLEND));
   VRB_GL_CHECK(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
-  static double ltime = m.context->GetTimestamp();
-  if ((m.context->GetTimestamp() - ltime) > 8.0) {
-    ltime = m.context->GetTimestamp();
-    m.model->ResetAnimations();
-  }
-  m.camera->SetTransform(Matrix::Translation(vrb::Vector(0.0f, 0.0f, 0.7f)));
+  m.camera->SetTransform(Matrix::Translation(vrb::Vector(0.0f, 0.0f, m.simpleMode ? 0.2f : 0.8f)));
   if (!m.context->IsOnRenderThread()) {
     VRB_LOG("UPDATING NOT ON RENDER THREAD!");
   }
-  bool pause = std::fmod(std::floor(m.context->GetTimestamp()), 2.0f) == 0.0;
-  m.model->SetAnimationState(pause ? AnimationState::Stop : AnimationState::Play);
+  /*
+  if (!m.simpleMode) {
+    bool pause = std::fmod(std::floor(m.context->GetTimestamp()), 2.0f) == 0.0;
+    m.model->SetAnimationState(pause ? AnimationState::Stop : AnimationState::Play);
+  }
+   */
   m.context->Update();
   m.drawList->Reset();
   m.root->Cull(*m.cullVisitor, *m.drawList);
   m.drawList->Draw(*m.camera);
 }
+
+void
+Viewer::ScreenTap(const float aX, const float aY) {
+  m.simpleMode = !m.simpleMode;
+  if (m.simpleMode) {
+    m.SimpleAnimation();
+  } else {
+    m.ComplexAnimation();
+  }
+}
+
 
 Viewer::Viewer(State& aState) : m(aState) {}
 Viewer::~Viewer() {}

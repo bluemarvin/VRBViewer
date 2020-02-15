@@ -54,11 +54,18 @@ JNI_METHOD(void, activityResumed)
   GetViewer().Resume();
 }
 
-jint JNI_OnLoad(JavaVM* aVm, void*) {
+JNI_METHOD(void, touchEvent)
+(JNIEnv*, jobject, jboolean isDown, jfloat xx, jfloat yy) {
+  if (!isDown) {
+    GetViewer().ScreenTap(xx, yy);
+  }
+}
+
+jint JNI_OnLoad(JavaVM*, void*) {
   return JNI_VERSION_1_6;
 }
 
-void JNI_OnUnLoad(JavaVM* vm, void* reserved) {
+void JNI_OnUnload(JavaVM*, void* reserved) {
 }
 
 } // extern "C"

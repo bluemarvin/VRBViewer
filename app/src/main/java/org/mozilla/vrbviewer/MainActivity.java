@@ -5,6 +5,9 @@ import android.content.res.AssetManager;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.MotionEvent;
+import android.view.View;
+import android.widget.TextView;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -17,7 +20,12 @@ public class MainActivity extends Activity {
         System.loadLibrary("native-lib");
     }
 
-    GLSurfaceView mView;
+    private GLSurfaceView mView;
+    private TextView mFrameRate;
+    private int mFrameCount;
+    private long mLastFrameTime = System.currentTimeMillis();
+
+
     final Runnable mResumeRunnable = new Runnable() {
         @Override
         public void run() {
@@ -44,6 +52,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        mFrameRate = findViewById(R.id.frame_rate_text);
         mView = findViewById(R.id.gl_view);
         mView.setEGLContextClientVersion(3);
         mView.setEGLConfigChooser(8, 8, 8, 8, 16, 0);
@@ -61,6 +70,15 @@ public class MainActivity extends Activity {
 
             @Override
             public void onDrawFrame(GL10 gl10) {
+
+                mFrameCount++;
+                long ctime = System.currentTimeMillis();
+                if ((ctime - mLastFrameTime) >= 1000) {
+                    final int value =  Math.round(mFrameCount / ((ctime - mLastFrameTime) / 1000.0f));
+                    mLastFrameTime = ctime;
+                    mFrameCount = 0;
+                    runOnUiThread(() -> mFrameRate.setText(String.valueOf(value)));
+                }
                 draw();
             }
         });
@@ -98,6 +116,7 @@ public class MainActivity extends Activity {
 
             }
         }
+        setImmersiveSticky();
     }
 
     @Override
@@ -114,10 +133,50 @@ public class MainActivity extends Activity {
         super.onPause();
     }
 
+    void setImmersiveSticky() {
+        getWindow()
+                .getDecorView()
+                .setSystemUiVisibility(
+                        View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                                | View.SYSTEM_UI_FLAG_FULLSCREEN
+                                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent aEvent) {
+        if (aEvent.getActionIndex() != 0) {
+            Log.e(LOGTAG,"aEvent.getActionIndex()=" + aEvent.getActionIndex());
+            return false;
+        }
+
+        int action = aEvent.getAction();
+        boolean down;
+        if (action == MotionEvent.ACTION_DOWN) {
+            down = true;
+        } else if (action == MotionEvent.ACTION_UP) {
+            down = false;
+        } else if (action == MotionEvent.ACTION_MOVE) {
+            down = true;
+        } else {
+            return false;
+        }
+
+        final boolean isDown = down;
+
+        final float xx = aEvent.getX(0);
+        final float yy = aEvent.getY(0);
+        mView.queueEvent(() -> touchEvent(isDown, xx, yy));
+        return true;
+    }
+
     private native void updateViewport(int width, int height);
     private native void draw();
     private native void initializeJava(AssetManager aManager);
     private native void shutdownJava();
     private native void activityResumed();
     private native void activityPaused();
+    private native void touchEvent(boolean isDown, float xx, float yy);
 }

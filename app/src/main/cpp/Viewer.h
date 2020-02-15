@@ -21,10 +21,9 @@ public:
   void InitializeGL();
   void ShutdownJava();
   void ShutdownGL();
-  void LoadModel(const std::string& aUri);
-  void ReloadCurrentModel();
   void SetViewport(const int aWidth, const int aHeight);
   void Draw();
+  void ScreenTap(const float aX, const float aY);
 protected:
   struct State;
   Viewer(State& aState);
